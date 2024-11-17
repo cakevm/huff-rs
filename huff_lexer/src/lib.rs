@@ -625,6 +625,7 @@ impl<'a> Lexer<'a> {
                     }
 
                     // Then we should have an import path between quotes
+                    #[allow(clippy::collapsible_match)]
                     if let Some(char) = peekable_source.peek() {
                         match char {
                             '"' | '\'' => {

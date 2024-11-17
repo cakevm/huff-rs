@@ -229,18 +229,15 @@ impl FileSource {
         let mut relative_positions = vec![(Arc::clone(&self_ref), span)];
 
         // Then recursively grab source code for dependencies
-        match &self_ref.dependencies {
-            Some(vfs) => {
-                for fs in vfs {
-                    let mut flattened = FileSource::fully_flatten(Arc::clone(fs));
-                    let span =
-                        Span::new(full_source.len()..(full_source.len() + flattened.0.len()), None);
-                    full_source.push_str(&flattened.0);
-                    relative_positions.append(&mut flattened.1);
-                    relative_positions.push((Arc::clone(fs), span))
-                }
+        if let Some(vfs) = &self_ref.dependencies {
+            for fs in vfs {
+                let mut flattened = FileSource::fully_flatten(Arc::clone(fs));
+                let span =
+                    Span::new(full_source.len()..(full_source.len() + flattened.0.len()), None);
+                full_source.push_str(&flattened.0);
+                relative_positions.append(&mut flattened.1);
+                relative_positions.push((Arc::clone(fs), span))
             }
-            None => {}
         }
 
         // Return the full source

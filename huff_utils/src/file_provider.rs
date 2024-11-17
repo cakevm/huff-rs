@@ -42,7 +42,7 @@ impl<'a> FileProvider<'a> for FileSystemFileProvider {
     fn read_file(&self, pb: PathBuf) -> Result<Arc<FileSource>, CompilerError> {
         let file_loc = String::from(pb.to_string_lossy());
         let localized = strip_path_prefix(&file_loc);
-        match std::fs::read_to_string(&localized) {
+        match std::fs::read_to_string(localized) {
             Ok(source) => Ok(Arc::new(FileSource {
                 id: Uuid::new_v4(),
                 path: localized.to_string(),

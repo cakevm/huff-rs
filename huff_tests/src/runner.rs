@@ -33,7 +33,7 @@ impl TestRunner {
             Ok(Some(info)) => DbAccount { info, ..Default::default() },
             _ => DbAccount::new_not_existing(),
         };
-        account.info.balance = amount.into();
+        account.info.balance = amount;
         db.insert_account_info(address, account.info);
 
         self
@@ -250,7 +250,7 @@ impl TestRunner {
         env.tx.caller = caller;
         env.tx.transact_to = to;
         env.tx.data = data;
-        env.tx.value = value.into();
+        env.tx.value = value;
         env
     }
 }
