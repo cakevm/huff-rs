@@ -41,17 +41,18 @@ impl FileSystemFileProvider {
 impl<'a> FileProvider<'a> for FileSystemFileProvider {
     fn read_file(&self, pb: PathBuf) -> Result<Arc<FileSource>, CompilerError> {
         let file_loc = String::from(pb.to_string_lossy());
-        match std::fs::read_to_string(&file_loc) {
+        let localized = strip_path_prefix(&file_loc);
+        match std::fs::read_to_string(&localized) {
             Ok(source) => Ok(Arc::new(FileSource {
                 id: Uuid::new_v4(),
-                path: file_loc,
+                path: localized.to_string(),
                 source: Some(source),
                 access: Some(time::get_current_time()),
                 dependencies: None,
             })),
             Err(_) => {
-                tracing::error!(target: "core", "FILE READ FAILED: \"{}\"!", file_loc);
-                Err(CompilerError::FileUnpackError(UnpackError::MissingFile(file_loc)))
+                tracing::error!(target: "core", "FILE READ FAILED: \"{}\"!", localized);
+                Err(CompilerError::FileUnpackError(UnpackError::MissingFile(localized.to_string())))
             }
         }
     }
@@ -103,6 +104,7 @@ impl<'a> FileProvider<'a> for InMemoryFileProvider {
     fn read_file(&self, pb: PathBuf) -> Result<Arc<FileSource>, CompilerError> {
         let path = pb.to_str().unwrap_or_default();
         let localized = strip_path_prefix(path);
+        println!("LOCALIZED: {}", localized);
         match self.sources.get(localized) {
             Some(source) => Ok(Arc::new(FileSource {
                 id: Uuid::new_v4(),

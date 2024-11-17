@@ -10,6 +10,7 @@ members = [
   "huff_tests"
 ]
 exclude = [ "assets", "huffup", "huff-examples" ]
+resolver = "2"
 
 [profile.release]
 opt-level = "z"

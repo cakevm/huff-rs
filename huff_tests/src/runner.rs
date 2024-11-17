@@ -1,9 +1,5 @@
 use crate::prelude::{cheats_inspector::CheatsInspector, RunnerError, TestResult, TestStatus};
-use bytes::Bytes;
-use ethers_core::{
-    types::{Address, U256},
-    utils::hex,
-};
+use alloy_primitives::{hex, Address, Bytes, U256};
 use huff_codegen::Codegen;
 use huff_utils::{
     ast::{DecoratorFlag, MacroDefinition},
@@ -11,10 +7,8 @@ use huff_utils::{
 };
 use revm::{
     db::DbAccount,
-    primitives::{
-        BlockEnv, CfgEnv, CreateScheme, Env, ExecutionResult, Output, SpecId, TransactTo, TxEnv,
-    },
-    Database, InMemoryDB, EVM,
+    primitives::{Env, ExecutionResult, Output, TransactTo, LATEST},
+    Database, Evm, InMemoryDB,
 };
 
 /// The test runner allows execution of test macros within an in-memory REVM
@@ -35,13 +29,12 @@ impl TestRunner {
     pub fn set_balance(&mut self, address: Address, amount: U256) -> &mut Self {
         let db = self.db_mut();
 
-        let revm_address = revm::primitives::B160::from_slice(address.as_bytes());
-        let mut account = match db.basic(revm_address) {
+        let mut account = match db.basic(address) {
             Ok(Some(info)) => DbAccount { info, ..Default::default() },
             _ => DbAccount::new_not_existing(),
         };
         account.info.balance = amount.into();
-        db.insert_account_info(revm_address, account.info);
+        db.insert_account_info(address, account.info);
 
         self
     }
@@ -74,18 +67,21 @@ impl TestRunner {
         };
         let bootstrap = format!("{contract_size}80{contract_code_offset}3d393df3{code}");
 
-        let mut evm = EVM::new();
-        self.set_balance(Address::zero(), U256::MAX);
-        evm.env = self.build_env(
-            Address::zero(),
-            TransactTo::Create(CreateScheme::Create),
+        let env = self.build_env(
+            Address::ZERO,
+            TransactTo::Create,
             // The following should never panic, as any potential compilation error
             // as well as an uneven number of hex nibbles should be caught in the
             // compilation process.
             hex::decode(bootstrap).expect("Invalid hex").into(),
-            U256::zero(),
+            U256::ZERO,
         );
-        evm.database(self.db_mut());
+        self.set_balance(Address::ZERO, U256::MAX);
+        let mut evm = Evm::builder()
+            .with_spec_id(LATEST)
+            .with_env(Box::new(env))
+            .with_db(self.db_mut())
+            .build();
 
         // Send our CREATE transaction
         let er = evm.transact_commit().map_err(RunnerError::from)?;
@@ -93,10 +89,23 @@ impl TestRunner {
         // Check if deployment was successful
         let address = match er {
             ExecutionResult::Success { output: Output::Create(_, Some(addr)), .. } => addr,
-            _ => return Err(RunnerError(String::from("Test deployment failed"))),
+
+            ExecutionResult::Revert { gas_used, output } => {
+                return Err(RunnerError(format!(
+                    "Deployment reverted gas_used={}, output={:?}",
+                    gas_used, output
+                )));
+            }
+            ExecutionResult::Halt { reason, gas_used } => {
+                return Err(RunnerError(format!(
+                    "Deployment halted gas_used={}, reason={:?}",
+                    gas_used, reason
+                )));
+            }
+            _ => return Err(RunnerError(String::from("Unexpected transaction status"))),
         };
-        let ethers_address = ethers_core::types::Address::from_slice(address.as_bytes());
-        Ok(ethers_address)
+
+        Ok(address)
     }
 
     /// Perform a call to a deployed contract
@@ -108,21 +117,25 @@ impl TestRunner {
         value: U256,
         data: String,
     ) -> Result<TestResult, RunnerError> {
-        let mut evm = EVM::new();
-        let mut inspector = CheatsInspector::default();
-        self.set_balance(caller, U256::MAX);
-        let revm_address = revm::primitives::B160::from_slice(address.as_bytes());
-
-        evm.env = self.build_env(
+        let env = self.build_env(
             caller,
-            TransactTo::Call(revm_address),
+            TransactTo::Call(address),
             hex::decode(data).expect("Invalid calldata").into(),
             value,
         );
-        evm.database(self.db_mut());
+
+        let inspector = CheatsInspector::default();
+
+        self.set_balance(caller, U256::MAX);
+        let mut evm = Evm::builder()
+            .with_spec_id(LATEST)
+            .with_env(Box::new(env))
+            .with_db(self.db_mut())
+            .with_external_context(inspector)
+            .build();
 
         // Send our CALL transaction
-        let er = evm.inspect_commit(&mut inspector).map_err(RunnerError::from)?;
+        let er = evm.transact_commit().map_err(RunnerError::from)?;
 
         // Extract execution params
         let gas_used = match er {
@@ -161,7 +174,13 @@ impl TestRunner {
         // Return our test result
         // NOTE: We subtract 21000 gas from the gas result to account for the
         // base cost of the CALL.
-        Ok(TestResult { name, return_data, gas: gas_used - 21000, status, logs: inspector.logs })
+        Ok(TestResult {
+            name,
+            return_data,
+            gas: gas_used - 21000,
+            status,
+            logs: evm.context.external.logs,
+        })
     }
 
     /// Compile a test macro and run it in an in-memory REVM instance.
@@ -194,7 +213,7 @@ impl TestRunner {
 
                     // Set environment flags passed through the test decorator
                     let mut data = String::default();
-                    let mut value = U256::zero();
+                    let mut value = U256::ZERO;
                     if let Some(decorator) = &m.decorator {
                         for flag in &decorator.flags {
                             match flag {
@@ -206,13 +225,13 @@ impl TestRunner {
                                         s.to_owned()
                                     };
                                 }
-                                DecoratorFlag::Value(v) => value = U256::from(v),
+                                DecoratorFlag::Value(v) => value = U256::from_be_bytes(*v),
                             }
                         }
                     }
 
                     // Call the deployed test
-                    let res = self.call(name, Address::zero(), address, value, data)?;
+                    let res = self.call(name, Address::ZERO, address, value, data)?;
                     Ok(res)
                 }
                 Err(e) => Err(CompilerError::CodegenError(e).into()),
@@ -223,26 +242,15 @@ impl TestRunner {
 
     /// Build an EVM transaction environment.
     fn build_env(&self, caller: Address, to: TransactTo, data: Bytes, value: U256) -> Env {
-        let revm_address = revm::primitives::B160::from_slice(caller.as_bytes());
-        Env {
-            cfg: CfgEnv {
-                chain_id: revm::primitives::U256::from(1),
-                spec_id: SpecId::LATEST,
-                ..Default::default()
-            },
-            block: BlockEnv {
-                basefee: revm::primitives::U256::from(0),
-                gas_limit: U256::MAX.into(),
-                ..Default::default()
-            },
-            tx: TxEnv {
-                chain_id: 1.into(),
-                caller: revm_address,
-                transact_to: to,
-                data,
-                value: value.into(),
-                ..Default::default()
-            },
-        }
+        let mut env = Env::default();
+        env.cfg.chain_id = 1;
+        env.block.basefee = U256::ZERO;
+        env.block.gas_limit = U256::MAX;
+        env.tx.chain_id = 1.into();
+        env.tx.caller = caller;
+        env.tx.transact_to = to;
+        env.tx.data = data;
+        env.tx.value = value.into();
+        env
     }
 }

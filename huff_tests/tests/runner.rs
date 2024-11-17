@@ -1,4 +1,4 @@
-use ethers_core::types::{Address, U256};
+use alloy_primitives::{Address, U256};
 use huff_tests::prelude::{TestRunner, TestStatus};
 
 #[test]
@@ -7,13 +7,7 @@ fn test_runner_return() {
     let code = "602060005260206000F3";
     let deployed_addr = runner.deploy_code(code.to_string()).unwrap();
     let result = runner
-        .call(
-            String::from("RETURN"),
-            Address::zero(),
-            deployed_addr,
-            U256::zero(),
-            String::default(),
-        )
+        .call(String::from("RETURN"), Address::ZERO, deployed_addr, U256::ZERO, String::default())
         .unwrap();
 
     assert_eq!(result.name, "RETURN");
@@ -34,7 +28,7 @@ fn test_runner_stop() {
     let code = "00";
     let deployed_addr = runner.deploy_code(code.to_string()).unwrap();
     let result = runner
-        .call(String::from("STOP"), Address::zero(), deployed_addr, U256::zero(), String::default())
+        .call(String::from("STOP"), Address::ZERO, deployed_addr, U256::ZERO, String::default())
         .unwrap();
 
     assert_eq!(result.name, "STOP");
@@ -52,13 +46,7 @@ fn test_runner_revert() {
     let code = "60006000FD";
     let deployed_addr = runner.deploy_code(code.to_string()).unwrap();
     let result = runner
-        .call(
-            String::from("REVERT"),
-            Address::zero(),
-            deployed_addr,
-            U256::zero(),
-            String::default(),
-        )
+        .call(String::from("REVERT"), Address::ZERO, deployed_addr, U256::ZERO, String::default())
         .unwrap();
 
     assert_eq!(result.name, "REVERT");

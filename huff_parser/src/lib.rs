@@ -2,7 +2,6 @@
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
 #![forbid(unsafe_code)]
-#![forbid(where_clauses_object_safety)]
 
 use huff_utils::{
     ast::*,
@@ -1172,7 +1171,7 @@ impl Parser {
                                     hint: Some("Expected valid hex bytecode.".to_string()),
                                     spans: AstSpan(new_spans),
                                     cursor: self.cursor,
-                                })
+                                });
                             }
                         } else {
                             StatementType::LabelCall(ident_str.to_string())
@@ -1188,7 +1187,7 @@ impl Parser {
                         hint: Some("Expected an identifier string.".to_string()),
                         spans: AstSpan(new_spans),
                         cursor: self.cursor,
-                    })
+                    });
                 }
             };
         }
@@ -1297,7 +1296,7 @@ impl Parser {
                         hint: None,
                         spans: AstSpan(vec![self.current_token.span.clone()]),
                         cursor: self.cursor,
-                    })
+                    });
                 }
                 Ok(self.match_kind(self.current_token.kind.clone())?)
             }
@@ -1308,7 +1307,7 @@ impl Parser {
                         hint: None,
                         spans: AstSpan(vec![self.current_token.span.clone()]),
                         cursor: self.cursor,
-                    })
+                    });
                 }
                 Ok(self.match_kind(self.current_token.kind.clone())?)
             }
@@ -1323,7 +1322,7 @@ impl Parser {
                         hint: None,
                         spans: AstSpan(vec![self.current_token.span.clone()]),
                         cursor: self.cursor,
-                    })
+                    });
                 }
                 let curr_token_kind = self.current_token.kind.clone();
                 self.consume();

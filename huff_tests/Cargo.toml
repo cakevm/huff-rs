@@ -12,8 +12,8 @@ A stripped down testing framework for the Huff language.
 keywords = ["huff", "rust", "evm", "bytecode", "compiler"]
 
 [dependencies]
-revm = "3.0.0"
-ethers-core = "1.0.2"
+revm = "18.0.0"
+alloy-primitives = "0.8.12"
 bytes = "1.2.1"
 comfy-table = "6.0.0"
 yansi = "0.5.1"
