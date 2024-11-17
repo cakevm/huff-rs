@@ -102,7 +102,12 @@ impl TestRunner {
                     gas_used, reason
                 )));
             }
-            _ => return Err(RunnerError(String::from("Unexpected transaction status"))),
+            ExecutionResult::Success { output, .. } => {
+                return Err(RunnerError(format!(
+                    "Deployment failed with unexpected output: {:?}",
+                    output
+                )));
+            }
         };
 
         Ok(address)
@@ -141,7 +146,7 @@ impl TestRunner {
         let gas_used = match er {
             ExecutionResult::Success { gas_used, .. } => gas_used,
             ExecutionResult::Revert { gas_used, .. } => gas_used,
-            _ => return Err(RunnerError(String::from("Unexpected transaction status"))),
+            ExecutionResult::Halt { gas_used, .. } => gas_used,
         };
         let status = match er {
             ExecutionResult::Success { .. } => TestStatus::Success,
@@ -158,7 +163,7 @@ impl TestRunner {
                         Some(hex::encode(b))
                     }
                 } else {
-                    return Err(RunnerError(String::from("Unexpected transaction kind")));
+                    return Err(RunnerError(String::from("Unexpected transaction kind (CREATE)")));
                 }
             }
             ExecutionResult::Revert { output, .. } => {
@@ -168,7 +173,9 @@ impl TestRunner {
                     Some(hex::encode(output))
                 }
             }
-            _ => return Err(RunnerError(String::from("Unexpected transaction status"))),
+            ExecutionResult::Halt { reason, .. } => {
+                return Err(RunnerError(format!("Transaction halted with reason: {:?}", reason)));
+            }
         };
 
         // Return our test result
